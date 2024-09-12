@@ -26,7 +26,7 @@ dependencies {
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
     implementation("org.slf4j:slf4j-api:2.0.1")
     implementation("org.slf4j:slf4j-simple:2.0.1")
-    implementation("ch.qos.logback:logback-classic:1.2.10")
+    implementation("ch.qos.logback:logback-classic:1.4.12")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
@@ -37,7 +37,7 @@ tasks.test {
     useJUnitPlatform()
 }
 kotlin {
-    jvmToolchain(19)
+    jvmToolchain(17)
 }
 
 application {
