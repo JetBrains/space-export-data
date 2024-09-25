@@ -3,52 +3,47 @@ package org.jetbrains.chats
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.requireObject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
+import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.types.enum
+import kotlinx.coroutines.*
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.jetbrains.ExportCommandContext
-import org.jetbrains.ExportFormat
-import space.jetbrains.api.runtime.BatchInfo
+import org.jetbrains.downloadFile
+import org.jetbrains.loadBatch
 import space.jetbrains.api.runtime.resources.chats
 import space.jetbrains.api.runtime.resources.uploads
-import space.jetbrains.api.runtime.types.AllChannelsListEntry
-import space.jetbrains.api.runtime.types.AttachmentInfo
-import space.jetbrains.api.runtime.types.ChannelIdentifier
-import space.jetbrains.api.runtime.types.ChannelItemRecord
-import space.jetbrains.api.runtime.types.ChatContactDetails
-import space.jetbrains.api.runtime.types.ChatMessageIdentifier
-import space.jetbrains.api.runtime.types.FileAttachment
-import space.jetbrains.api.runtime.types.ImageAttachment
-import space.jetbrains.api.runtime.types.MessagesSorting
-import space.jetbrains.api.runtime.types.UnfurlAttachment
-import space.jetbrains.api.runtime.types.VideoAttachment
+import space.jetbrains.api.runtime.types.*
 import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
 
 private val logger = KotlinLogging.logger("ChatExport")
+
+enum class ChatExportFormat {
+    Json
+}
 
 class ChatsCommand : CliktCommand() {
     override fun commandHelp(context: Context): String = """
     Export all available to user chats in the following format.
     """.trimIndent()
 
+    private val format by option(
+        help = "Export file format",
+        envvar = "FORMAT",
+    ).enum<ChatExportFormat>().default(ChatExportFormat.Json)
+
     private val context by requireObject<ExportCommandContext>()
     private val client get() = context.spaceApiClient
 
     override fun run() = runBlocking {
-        val exporter = when (context.format) {
-            ExportFormat.Json -> JsonExporter("export/json")
+        val exporter = when (format) {
+            ChatExportFormat.Json -> JsonExporter("export/chat/json")
         }
+
         suspend fun dumpMessages(channel: ExportedChannel) {
             with(exporter) {
                 dump(channel, fetchMessages(channel))
@@ -58,30 +53,16 @@ class ChatsCommand : CliktCommand() {
         fetchDMs().forEach { dumpMessages(it) }
     }
 
-    suspend fun fetchGroupNamedChannels(): List<ExportedChannel> {
-        val channels = mutableListOf<AllChannelsListEntry>()
-        var offset = ""
-        var hasNext = true
-        while (hasNext) {
-            val response = client.spaceClient.chats.channels.listAllChannels("", batchInfo = BatchInfo(offset, 50))
-            channels.addAll(response.data)
-            offset = response.next
-            hasNext = (response.totalCount ?: 0) > channels.size
+    private suspend fun fetchGroupNamedChannels(): List<ExportedChannel> {
+        val channels = loadBatch { batch ->
+            client.spaceClient.chats.channels.listAllChannels("", batchInfo = batch)
         }
         return channels.map { ExportedChannel(it.channelId, it.name, ExportedChannel.Type.GroupChannel) }
     }
 
-    suspend fun fetchDMs(): List<ExportedChannel> {
-        val channels = mutableListOf<ExportedChannel>()
-        var offset = ""
-        var hasNext = true
-        while (hasNext) {
-            val response = client.spaceClient.chats.channels.listDirectMessageChannelsAndConversations(
-                BatchInfo(
-                    offset,
-                    50
-                )
-            ) {
+    private suspend fun fetchDMs(): List<ExportedChannel> {
+        val channels = loadBatch { batch ->
+            client.spaceClient.chats.channels.listDirectMessageChannelsAndConversations(batch) {
                 details {
                     user()
                     users()
@@ -91,26 +72,26 @@ class ChatsCommand : CliktCommand() {
                 key()
                 channelType()
             }
-            channels.addAll(response.data.mapNotNull {
-                ExportedChannel(
-                    it.id,
-                    when (val details = it.details) {
-                        is ChatContactDetails.Profile -> details.user.username.takeIf { it.isNotBlank() } ?: "user-${details.user.id}"
-                        is ChatContactDetails.Conversation -> (details.subject
-                            ?: details.users.joinToString("_") { it.username }).takeIf { it.isNotEmpty() } ?: "conversation-${it.id}"
-
-                        else -> {
-                            logger.error("${it.details::class.simpleName} invariant key=${it.key} channelType=${it.channelType}")
-                            return@mapNotNull null
-                        }
-                    },
-                    ExportedChannel.Type.DM)
-            })
-            offset = response.next
-            hasNext = (response.totalCount ?: 0) > channels.size
         }
-        return channels
 
+        return channels.mapNotNull {
+            ExportedChannel(
+                it.id,
+                when (val details = it.details) {
+                    is ChatContactDetails.Profile -> details.user.username.takeIf { it.isNotBlank() }
+                        ?: "user-${details.user.id}"
+
+                    is ChatContactDetails.Conversation -> (details.subject
+                        ?: details.users.joinToString("_") { it.username }).takeIf { it.isNotEmpty() }
+                        ?: "conversation-${it.id}"
+
+                    else -> {
+                        logger.error("${it.details::class.simpleName} invariant key=${it.key} channelType=${it.channelType}")
+                        return@mapNotNull null
+                    }
+                },
+                ExportedChannel.Type.DM)
+        }
     }
 
     suspend fun fetchMessages(channel: ExportedChannel): List<ExportedMessage> {
@@ -206,20 +187,6 @@ fun ensureDirectoryExists(path: String) {
 
 interface ChatExporter {
     suspend fun CoroutineScope.dump(channel: ExportedChannel, messages: List<ExportedMessage>)
-
-    fun downloadFile(url: String, outputFileName: String) {
-        val client = OkHttpClient()
-        val request = Request.Builder().url(url).build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("Failed to download file: $response")
-
-            response.body?.byteStream()?.use { input ->
-                FileOutputStream(File(outputFileName)).use { output ->
-                    input.copyTo(output)
-                }
-            }
-        }
-    }
 }
 
 class JsonExporter(val basePath: String) : ChatExporter {
@@ -238,7 +205,7 @@ class JsonExporter(val basePath: String) : ChatExporter {
         messages.map { it.attachments }.flatten().map {
             async(Dispatchers.IO) {
                 logger.info("Downloading ${it.name}")
-                downloadFile(it.url, "$path/${it.name}")
+                downloadFile(it.url, File("$path/${it.name}"))
             }
         }.awaitAll()
     }
