@@ -9,6 +9,7 @@ Note that you can only export data that your Space account permissions allow you
 3. Click **New personal token**.
 4. To be able to export all data you have access to, select **Access** > **Full**. Otherwise, choose the limited scope of permissions to filter out unwanted data.
 5. Create and save your token.
+
 [See the detailed instructions on creating a personal token in Space](https://www.jetbrains.com/help/space/personal-tokens.html#create-a-personal-token)
 
 ## Step 2. Clone this entire repository locally
@@ -17,16 +18,16 @@ Note that you can only export data that your Space account permissions allow you
 * The export of Chats and Documents is performed separately by executing the respective commands and passing specific arguments.
 * All exported data will be placed into the `export/` folder.
 
-## Export Chats
+### Export Chats
 
 To export all chats you have access to, run the following command from the `./space-export` directory:
 ```
 ./space-export chats --token=<your-personal-token> --org=<your-organization>.jetbrains.space --format=json 
 ```
-All exported chat messages will be stored in: `export/chats/channels/<channel-name>/history.json`, 
-Chat attachments will be downloaded into the same respective channel directory.
+* All exported chat messages will be stored in: `export/chats/channels/<channel-name>/history.json` 
+* Chat attachments will be downloaded into the same respective channel directory.
 
-## Export Documents
+### Export Documents
 
 To export all documents you have access to, run the following command from the `./space-export` directory:
 ```
