@@ -22,8 +22,9 @@ Note that you can only export data that your Space account permissions allow you
 
 To export all chats you have access to, run the following command from the `./space-export` directory:
 ```
-./space-export chats --token=<your-personal-token> --org=<your-organization>.jetbrains.space --format=json 
+./space-export --token=<your-personal-token> --org=<your-organization>.jetbrains.space --format=json chats 
 ```
+* Please note that the `chats` command should be placed at the end of the command line following all arguments.
 * All exported chat messages will be stored in: `export/chats/channels/<channel-name>/history.json` 
 * Chat attachments will be downloaded into the same respective channel directory.
 
@@ -31,8 +32,9 @@ To export all chats you have access to, run the following command from the `./sp
 
 To export all documents you have access to, run the following command from the `./space-export` directory:
 ```
-./space-export documents --token=<your-personal-token> --org=<your-organization>.jetbrains.space 
+./space-export --token=<your-personal-token> --org=<your-organization>.jetbrains.space documents 
 ```
-* If you only want to export personal documents add the `--scope=personal`argument to the command.
-* To export documents from specific project, add the argument `--scope=project --project-key=<projectKey>` to the command. To find out the project key, go to the project page in Space.
+* Please note that the `documents` command should be placed at the end of the command line following all arguments.
+* If you only want to export personal documents, add the argument `--scope=personal` to the command line.
+* To export documents from specific project, add the argument `--scope=project --project-key=<projectKey>` to the command line. To find out the project key, go to the project page in Space.
 * The default directory for all exported personal and project documents is `export/documents/`.
