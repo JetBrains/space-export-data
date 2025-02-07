@@ -124,7 +124,7 @@ class DocumentsCommand : CliktCommand() {
         for (subfolder in subfolders) {
             exportPersonalFolder(
                 folder = FolderIdentifier.Id(subfolder.id),
-                folderPath = folderPath.resolve(subfolder.name)
+                folderPath = folderPath.resolve(subfolder.name.replace('/', '_'))
             )
         }
     }
@@ -176,7 +176,7 @@ class DocumentsCommand : CliktCommand() {
             exportProjectFolder(
                 project = project,
                 folder = FolderIdentifier.Id(subfolder.id),
-                folderPath = folderPath.resolve(subfolder.name)
+                folderPath = folderPath.resolve(subfolder.name.replace('/', '_'))
             )
         }
     }
@@ -186,7 +186,7 @@ class DocumentsCommand : CliktCommand() {
 
         when (document.bodyType) {
             DocumentBodyType.FILE -> {
-                val documentPath = folderPath.resolve(document.title)
+                val documentPath = folderPath.resolve(document.title.replace('/', '_'))
                 val fileUrl = client.spaceClient.server.serverUrl + "/drive/files/" + document.id
                 val accessToken = client.spaceClient.token().accessToken
 
@@ -196,7 +196,7 @@ class DocumentsCommand : CliktCommand() {
             }
 
             DocumentBodyType.TEXT -> {
-                val documentPath = folderPath.resolve(document.title + ".md")
+                val documentPath = folderPath.resolve(document.title.replace('/', '_') + ".md")
 
                 @Suppress("DEPRECATION")
                 val documentBody = document.documentBody as TextDocument
